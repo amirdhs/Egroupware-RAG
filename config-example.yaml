@@ -1,0 +1,68 @@
+# EGroupware RAG Configuration Example
+# Copy this file to config.yaml and update with your credentials
+
+# EGroupware Connection
+egroupware:
+  base_url: "your-egroupware-base-url"
+  username: "your-username"
+  password: "your-password"
+  timeout: 30
+
+# Embedding Model (choose one)
+embeddings:
+  provider: "huggingface"  # Options: huggingface, openai, ionos
+
+  # HuggingFace - Multilingual models (default)
+  hf_model: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
+  # Alternative recommended: "sentence-transformers/distiluse-base-multilingual-cased-v2"
+
+  # If you prefer OpenAI embeddings, set provider: openai and add openai_key/openai_model
+  # openai_key: "your-openai-api-key-here"
+  # openai_model: "text-embedding-3-small"
+
+#  # IONOS Embedding (uncomment and configure to use)
+#    provider: "ionos"
+#    api_key: "your-ionos-api-key-here"
+#    api_url: "https://openai.inference.de-txl.ionos.com/v1"
+#    model: "BAAI/bge-m3"
+
+
+# OpenAI LLM for Response Generation
+llm:
+  provider: "openai"
+  api_key: "your-openai-api-key-here"
+  model: "gpt-4o-mini"
+  temperature: 0.7
+
+  # IONOS
+  # provider: "ionos"
+  # api_key: "your-ionos-api-key-here"
+  # api_url: "https://openai.inference.de-txl.ionos.com/v1"
+  # model: "meta-llama/Llama-3.3-70B-Instruct"
+
+# Qdrant Vector Database Configuration
+qdrant:
+  mode: "disk"  # Options: memory, disk, server
+  path: "./qdrant_storage"  # Path for disk mode
+  # For server mode, use:
+  # host: "localhost"
+  # port: 6333
+
+# Chunking Configuration
+chunking:
+  # API fetch chunk size - number of items to fetch per API request
+  api_fetch_size: 500
+  
+  # Text chunking for embeddings - splits large documents into smaller chunks
+  text_chunk_size: 1000        # characters per chunk
+  text_chunk_overlap: 200      # overlap between chunks for context preservation
+  
+  # Embedding batch size - number of documents to embed at once
+  embedding_batch_size: 32
+
+# Web Server
+server:
+  host: "0.0.0.0"
+  port: 5003
+  debug: true
