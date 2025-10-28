@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EGroupware RAG Search System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+        }
+
+        .sidebar {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            height: fit-content;
+        }
+
+        .search-container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            height: 70vh;
+        }
+
+        .search-header {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .search-header h2 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .search-header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .section-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #38a169;
+        }
+
+        .btn-danger {
+            background: #f56565;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+
+        .stats {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f7fafc;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .stats-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .stats-item:last-child {
+            border-bottom: none;
+        }
+
+        .results {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 10px;
+        }
+
+        .result-item {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            background: white;
+            border: 2px solid #e2e8f0;
+            animation: fadeIn 0.3s;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .result-app {
+            background: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .result-similarity {
+            color: #48bb78;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .result-content {
+            color: #333;
+            line-height: 1.5;
+        }
+
+        .no-results {
+            text-align: center;
+            color: #666;
+            padding: 40px;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            background: #667eea;
+            color: white;
+            margin-left: 50px;
+        }
+
+        .message.assistant {
+            background: white;
+            border: 2px solid #e2e8f0;
+            margin-right: 50px;
+        }
+
+        .message-label {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            opacity: 0.8;
+        }
+
+        .sources {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+            font-size: 13px;
+        }
+
+        .source-item {
+            padding: 8px;
+            margin-top: 8px;
+            background: #f7fafc;
+            border-radius: 5px;
+            border-left: 3px solid #667eea;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .search-input:focus {
+            border-color: #667eea;
+        }
+
+        .btn-send {
+            padding: 15px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-send:hover {
+            background: #5568d3;
+            transform: scale(1.05);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .filter-section {
+            margin: 15px 0;
+        }
+
+        .filter-section label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #4a5568;
+        }
+
+        .filter-section select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .status-indicator.green {
+            background: #48bb78;
+        }
+
+        .status-indicator.red {
+            background: #f56565;
+        }
+
+        .user-info {
+            margin-top: 10px;
+            text-align: right;
+        }
+
+        .user-info span {
+            font-size: 14px;
+            color: #333;
+            margin-right: 10px;
+        }
+
+        .btn-logout {
+            padding: 8px 16px;
+            background: #f56565;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn-logout:hover {
+            background: #e53e3e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>EGroupware RAG Search</h1>
+            <p class="subtitle">Semantic Search & Question Answering System</p>
+            <div class="user-info">
+                <span id="userInfo">Loading user info...</span>
+                <button class="btn-logout" onclick="logout()">🚪 Logout</button>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="sidebar">
+                <div class="section-title">📂 Data Indexing</div>
+
+                <button class="btn btn-success" onclick="indexApp('all')">
+                    🔄 Index All Data
+                </button>
+                <button class="btn btn-success" onclick="indexApp('addressbook')">
+                    👥 Index Addressbook
+                </button>
+                <button class="btn btn-success" onclick="indexApp('calendar')">
+                    📅 Index Calendar
+                </button>
+                <button class="btn btn-success" onclick="indexApp('infolog')">
+                    📋 Index InfoLog
+                </button>
+
+                <div class="section-title" style="margin-top: 25px;">⚙️ System</div>
+
+                <button class="btn btn-primary" onclick="loadStats()">
+                    📊 Refresh Stats
+                </button>
+
+                <button class="btn btn-danger" onclick="resetDatabase()">
+                    🗑️ Reset Database
+                </button>
+
+                <div class="filter-section">
+                    <label for="appFilter">🔍 Filter by App:</label>
+                    <select id="appFilter">
+                        <option value="">All Apps</option>
+                        <option value="addressbook">Addressbook</option>
+                        <option value="calendar">Calendar</option>
+                        <option value="infolog">InfoLog</option>
+                    </select>
+                </div>
+
+                <div class="stats" id="stats">
+                    <div class="stats-item">
+                        <span><span class="status-indicator green"></span>Status:</span>
+                        <strong>Ready</strong>
+                    </div>
+                    <div class="stats-item">
+                        <span>Total Documents:</span>
+                        <strong id="totalDocs">-</strong>
+                    </div>
+                    <div class="stats-item">
+                        <span>Addressbook:</span>
+                        <strong id="addressbookDocs">-</strong>
+                    </div>
+                    <div class="stats-item">
+                        <span>Calendar:</span>
+                        <strong id="calendarDocs">-</strong>
+                    </div>
+                    <div class="stats-item">
+                        <span>InfoLog:</span>
+                        <strong id="infologDocs">-</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="search-container">
+                <div class="search-header">
+                    <h2>🔍 Semantic Search & Questions</h2>
+                    <p>Search through your EGroupware data using natural language or ask specific questions</p>
+                </div>
+
+                <div class="results" id="results">
+                    <div class="no-results">
+                        <h3>👋 Welcome to EGroupware RAG Search!</h3>
+                        <p>Enter your search query or question below to find relevant information from your EGroupware data.</p>
+                        <br>
+                        <p><strong>Examples:</strong></p>
+                        <ul style="text-align: left; display: inline-block; margin-top: 10px;">
+                            <li>Find contacts related to "Project X"</li>
+                            <li>What meetings are scheduled for next week?</li>
+                            <li>Show me InfoLog entries about "Annual Report"</li>
+                            <li>Who are the team members in the Addressbook?</li>
+                            
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="input-container">
+                    <input
+                        type="text"
+                        id="queryInput"
+                        class="search-input"
+                        placeholder="Enter your search query or ask a question..."
+                        onkeypress="if(event.key==='Enter') search()"
+                    >
+                    <button class="btn-search" onclick="search()">🔍 Search</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load stats on page load
+        window.onload = () => {
+            loadStats();
+            loadUserInfo();
+        };
+
+        async function search() {
+            const queryInput = document.getElementById('queryInput');
+            const query = queryInput.value.trim();
+
+            if (!query) return;
+
+            const appFilter = document.getElementById('appFilter').value;
+            const resultsDiv = document.getElementById('results');
+
+            // Clear previous results and show loading
+            resultsDiv.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div> Searching...
+                </div>
+            `;
+
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: query,
+                        app_filter: appFilter || null,
+                        top_k: 10
+                    })
+                });
+
+                const data = await response.json();
+
+                // Debug the response data
+                console.log('Search response data:', data);
+                console.log('Results count:', data.results ? data.results.length : 0);
+                
+                // Clear loading
+                resultsDiv.innerHTML = '';
+
+                // Show answer if available
+                if (data.response) {
+                    resultsDiv.innerHTML += `
+                        <div class="result-item" style="border-left: 4px solid #48bb78;">
+                            <div class="result-header">
+                                <span style="font-weight: bold; color: #48bb78;">🤖 AI Answer</span>
+                                <span class="result-similarity">AI Response</span>
+                            </div>
+                            <div class="result-content">${data.response}</div>
+                        </div>
+                    `;
+                }
+
+                // Show search results
+                if (data.results && data.results.length > 0) {
+                    resultsDiv.innerHTML += `<div style="margin: 20px 0; font-weight: bold; color: #666;">📚 Search Results (${data.results.length} found):</div>`;
+
+                    data.results.forEach((source, i) => {
+                        // Extract metadata for better display
+                        const metadata = source.metadata || {};
+                        const metadataHtml = Object.entries(metadata)
+                            .filter(([key, value]) => value && value !== '')
+                            .map(([key, value]) => `<div><strong>${key}:</strong> ${value}</div>`)
+                            .join('');
+                            
+                        resultsDiv.innerHTML += `
+                            <div class="result-item">
+                                <div class="result-header">
+                                    <span class="result-app">${source.app_name.toUpperCase()}</span>
+                                    <span class="result-similarity">${(source.similarity * 100).toFixed(1)}% match</span>
+                                </div>
+                                <div class="result-content">${source.content}</div>
+                                ${metadataHtml ? `<div class="result-metadata">${metadataHtml}</div>` : ''}
+                            </div>
+                        `;
+                    });
+                } else {
+                    resultsDiv.innerHTML += `
+                        <div class="no-results">
+                            <h3>🔍 No results found</h3>
+                            <p>Try different keywords or check if data is indexed.</p>
+                        </div>
+                    `;
+                }
+
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="result-item" style="border-left: 4px solid #f56565;">
+                        <div class="result-header">
+                            <span style="color: #f56565; font-weight: bold;">❌ Error</span>
+                        </div>
+                        <div class="result-content">Failed to search: ${error.message}</div>
+                    </div>
+                `;
+            }
+        }
+
+        async function indexApp(appName) {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳ Indexing...';
+
+            try {
+                // Use the correct API endpoint with app name in URL
+                const response = await fetch(`/api/index/${appName}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Check for errors in response
+                if (!data.success) {
+                    throw new Error(data.error || 'Indexing failed');
+                }
+
+                // Display success message
+                if (appName === 'all') {
+                    const results = data.results || [];
+                    const totalIndexed = data.total_indexed || 0;
+                    alert(`✅ Successfully indexed all data: ${totalIndexed} total documents`);
+                } else {
+                    const indexed = data.indexed || 0;
+                    alert(`✅ Successfully indexed ${appName}: ${indexed} documents`);
+                }
+
+                // Refresh stats
+                loadStats();
+
+            } catch (error) {
+                console.error('Indexing error:', error);
+                alert(`❌ Error indexing ${appName}: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+
+                document.getElementById('totalDocs').textContent = data.database.total_documents || 0;
+                document.getElementById('addressbookDocs').textContent = data.database.by_app.addressbook || 0;
+                document.getElementById('calendarDocs').textContent = data.database.by_app.calendar || 0;
+                document.getElementById('infologDocs').textContent = data.database.by_app.infolog || 0;
+
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        async function loadUserInfo() {
+            try {
+                const response = await fetch('/api/user');
+                const data = await response.json();
+                
+                // Use the correct property names from the server response
+                // Server returns username and user_id instead of name and email
+                const username = data.username || 'Unknown';
+                const userId = data.user_id || '';
+                
+                document.getElementById('userInfo').textContent = `👤 ${username} (${userId})`;
+
+            } catch (error) {
+                document.getElementById('userInfo').textContent = '👤 Guest';
+                console.error('Failed to load user info:', error);
+            }
+        }
+
+        async function logout() {
+            if (!confirm('🔒 Are you sure you want to logout?')) {
+                return;
+            }
+
+            try {
+                await fetch('/logout', { method: 'POST' });
+
+                // Redirect to login page
+                window.location.href = '/';
+            } catch (error) {
+                alert(`❌ Error logging out: ${error.message}`);
+            }
+        }
+
+        async function resetDatabase() {
+            if (!confirm('⚠️ This will delete all indexed data. Are you sure?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/reset', { method: 'POST' });
+                await response.json();
+
+                alert('✅ Database reset successfully');
+                loadStats();
+
+                // Clear search results
+                document.getElementById('results').innerHTML = `
+                    <div class="no-results">
+                        <h3>🗑️ Database Reset Complete</h3>
+                        <p>All indexed data has been cleared. You can now re-index your data.</p>
+                    </div>
+                `;
+
+            } catch (error) {
+                alert(`❌ Error resetting database: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>
+
