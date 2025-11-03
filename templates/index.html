@@ -366,9 +366,132 @@
         .btn-logout:hover {
             background: #e53e3e;
         }
+
+        /* Loading Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            min-width: 400px;
+            animation: modalFadeIn 0.3s ease-out;
+        }
+
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .modal-spinner {
+            display: inline-block;
+            width: 60px;
+            height: 60px;
+            border: 6px solid #f3f4f6;
+            border-top: 6px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .modal-message {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .modal-progress {
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .modal-progress-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .modal-progress-item:last-child {
+            border-bottom: none;
+        }
+
+        .modal-progress-status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .modal-progress-status.pending {
+            background: #e2e8f0;
+            color: #666;
+        }
+
+        .modal-progress-status.loading {
+            background: #667eea;
+            color: white;
+        }
+
+        .modal-progress-status.success {
+            background: #48bb78;
+            color: white;
+        }
+
+        .modal-progress-status.error {
+            background: #f56565;
+            color: white;
+        }
     </style>
 </head>
 <body>
+    <!-- Loading Modal -->
+    <div class="modal-overlay" id="loadingModal">
+        <div class="modal-content">
+            <div class="modal-spinner"></div>
+            <div class="modal-title">Indexing Data</div>
+            <div class="modal-message" id="modalMessage">Please wait while we index your data...</div>
+            <div class="modal-progress" id="modalProgress" style="display: none;">
+                <!-- Progress items will be inserted here -->
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <div class="header">
             <h1>EGroupware RAG Search</h1>
@@ -582,6 +705,9 @@
             btn.disabled = true;
             btn.textContent = '⏳ Indexing...';
 
+            // Show loading modal
+            showLoadingModal(appName);
+
             try {
                 // Use the correct API endpoint with app name in URL
                 const response = await fetch(`/api/index/${appName}`, {
@@ -601,26 +727,149 @@
                     throw new Error(data.error || 'Indexing failed');
                 }
 
-                // Display success message
+                // Update modal with success
                 if (appName === 'all') {
                     const results = data.results || [];
                     const totalIndexed = data.total_indexed || 0;
-                    alert(`✅ Successfully indexed all data: ${totalIndexed} total documents`);
+                    updateModalSuccess(`Successfully indexed all data: ${totalIndexed} total documents`, results);
                 } else {
                     const indexed = data.indexed || 0;
-                    alert(`✅ Successfully indexed ${appName}: ${indexed} documents`);
+                    updateModalSuccess(`Successfully indexed ${appName}: ${indexed} documents`);
                 }
 
                 // Refresh stats
                 loadStats();
 
+                // Hide modal after 2 seconds
+                setTimeout(() => {
+                    hideLoadingModal();
+                }, 2000);
+
             } catch (error) {
                 console.error('Indexing error:', error);
-                alert(`❌ Error indexing ${appName}: ${error.message}`);
+                updateModalError(`Error indexing ${appName}: ${error.message}`);
+                
+                // Hide modal after 3 seconds
+                setTimeout(() => {
+                    hideLoadingModal();
+                }, 3000);
             } finally {
                 btn.disabled = false;
                 btn.textContent = originalText;
             }
+        }
+
+        function showLoadingModal(appName) {
+            console.log('showLoadingModal called with:', appName);
+            const modal = document.getElementById('loadingModal');
+            const modalMessage = document.getElementById('modalMessage');
+            const modalProgress = document.getElementById('modalProgress');
+            
+            console.log('Modal element:', modal);
+            modal.classList.add('active');
+            
+            // App-specific icons and labels
+            const appConfig = {
+                'all': { icon: '🔄', label: 'All Applications' },
+                'addressbook': { icon: '👥', label: 'Addressbook' },
+                'calendar': { icon: '📅', label: 'Calendar' },
+                'infolog': { icon: '📋', label: 'InfoLog' }
+            };
+            
+            const config = appConfig[appName] || { icon: '📁', label: appName };
+            
+            if (appName === 'all') {
+                modalMessage.textContent = 'Indexing all applications...';
+                modalProgress.style.display = 'block';
+                modalProgress.innerHTML = `
+                    <div class="modal-progress-item">
+                        <span>� Addressbook</span>
+                        <span class="modal-progress-status loading">Processing...</span>
+                    </div>
+                    <div class="modal-progress-item">
+                        <span>📅 Calendar</span>
+                        <span class="modal-progress-status pending">Pending</span>
+                    </div>
+                    <div class="modal-progress-item">
+                        <span>📋 InfoLog</span>
+                        <span class="modal-progress-status pending">Pending</span>
+                    </div>
+                `;
+            } else {
+                modalMessage.textContent = `${config.icon} Indexing ${config.label}...`;
+                modalProgress.style.display = 'block';
+                modalProgress.innerHTML = `
+                    <div class="modal-progress-item">
+                        <span>${config.icon} ${config.label}</span>
+                        <span class="modal-progress-status loading">Processing...</span>
+                    </div>
+                `;
+            }
+        }
+
+        function updateModalSuccess(message, results = null) {
+            const modalMessage = document.getElementById('modalMessage');
+            const modalProgress = document.getElementById('modalProgress');
+            const modal = document.getElementById('loadingModal');
+            
+            // Update title
+            const modalTitle = modal.querySelector('.modal-title');
+            modalTitle.textContent = '✅ Success!';
+            modalTitle.style.color = '#48bb78';
+            
+            // Hide spinner
+            const spinner = modal.querySelector('.modal-spinner');
+            spinner.style.display = 'none';
+            
+            modalMessage.textContent = message;
+            
+            if (results && results.length > 0) {
+                modalProgress.style.display = 'block';
+                modalProgress.innerHTML = results.map(result => `
+                    <div class="modal-progress-item">
+                        <span>📱 ${result.app_name}</span>
+                        <span class="modal-progress-status success">${result.indexed} documents</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function updateModalError(message) {
+            const modalMessage = document.getElementById('modalMessage');
+            const modal = document.getElementById('loadingModal');
+            
+            // Update title
+            const modalTitle = modal.querySelector('.modal-title');
+            modalTitle.textContent = '❌ Error';
+            modalTitle.style.color = '#f56565';
+            
+            // Hide spinner
+            const spinner = modal.querySelector('.modal-spinner');
+            spinner.style.display = 'none';
+            
+            modalMessage.textContent = message;
+            modalMessage.style.color = '#f56565';
+        }
+
+        function hideLoadingModal() {
+            const modal = document.getElementById('loadingModal');
+            modal.classList.remove('active');
+            
+            // Reset modal for next use
+            setTimeout(() => {
+                const modalTitle = modal.querySelector('.modal-title');
+                const spinner = modal.querySelector('.modal-spinner');
+                const modalMessage = document.getElementById('modalMessage');
+                const modalProgress = document.getElementById('modalProgress');
+                
+                modalTitle.textContent = 'Indexing Data';
+                modalTitle.style.color = '#333';
+                spinner.style.display = 'inline-block';
+                modalMessage.textContent = 'Please wait while we index your data...';
+                modalMessage.style.color = '#666';
+                modalProgress.style.display = 'none';
+                modalProgress.innerHTML = '';
+            }, 300);
         }
 
         async function loadStats() {
