@@ -477,10 +477,18 @@ class RAGService:
             'results': results
         }
 
-    def search(self, query: str, app_filter: Optional[str] = None, top_k: int = 5) -> Dict[str, Any]:
-        """Search EGroupware data using natural language query"""
+    def search(self, query: str, app_filter: Optional[str] = None, top_k: int = 5, fast_mode: bool = False) -> Dict[str, Any]:
+        """Search EGroupware data using natural language query
+        
+        Args:
+            query: Search query
+            app_filter: Filter by application name
+            top_k: Number of results to return
+            fast_mode: If True, skip LLM generation for instant results
+        """
         try:
-            logger.info(f"RAG search started: query='{query}', app_filter={app_filter}, top_k={top_k}")
+            mode_str = "FAST MODE" if fast_mode else "NORMAL"
+            logger.info(f"RAG search started ({mode_str}): query='{query}', app_filter={app_filter}, top_k={top_k}")
             
             # Generate query embedding
             logger.info(f"Generating embedding for query: '{query}'")
@@ -507,22 +515,27 @@ class RAGService:
             else:
                 logger.warning("No results returned from database search")
 
-            # Generate LLM response if available
+            # Generate LLM response if available and not in fast mode
             response = None
-            if results and self.llm:
+            if results and self.llm and not fast_mode:
                 try:
                     logger.info("Generating LLM response")
-                    response = self.llm.generate_response(query, results)
+                    response = self.llm.generate_response(query, results, use_simple=False)
                     logger.info(f"LLM response generated: {len(response)} chars")
                 except Exception as e:
                     logger.warning(f"LLM generation failed: {e}")
+            elif results and fast_mode:
+                # In fast mode, always use simple response
+                logger.info("Fast mode: using simple response (no LLM)")
+                response = self.llm.generate_response(query, results, use_simple=True) if self.llm else None
 
             return {
                 'success': True,
                 'query': query,
                 'results': results,
                 'response': response,
-                'count': len(results)
+                'count': len(results),
+                'fast_mode': fast_mode
             }
 
         except Exception as e:
