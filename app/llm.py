@@ -102,6 +102,9 @@ class LLMService:
             # Store configuration
             self.client = requests
             self.headers = headers
+            # Ensure URL ends with /chat/completions for LLM endpoint
+            if not api_url.endswith('/chat/completions'):
+                api_url = api_url.rstrip('/') + '/chat/completions'
             self.api_url = api_url
             self.model = config.get('model', 'mixtral-8x7b')
             logger.info(f"✅ IONOS LLM initialized: {self.model}")
