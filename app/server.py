@@ -12,6 +12,7 @@ from typing import Dict, Any
 from app.egroupware import EGroupwareClient
 from app.embeddings import EmbeddingService
 from app.database import QdrantDatabase
+from app.mariadb_database import MariaDBDatabase
 from app.llm import LLMService
 from app.rag import RAGService
 
@@ -39,12 +40,33 @@ llm_service = None
 
 def load_config() -> Dict[str, Any]:
     """Load configuration from YAML file"""
-    try:
-        with open('config.yaml', 'r') as f:
-            return yaml.safe_load(f)
-    except Exception as e:
-        logger.error(f"Failed to load config: {e}")
-        raise
+    import time
+    max_retries = 3
+    retry_delay = 0.5
+    
+    for attempt in range(max_retries):
+        try:
+            # Use unbuffered read to avoid Docker/macOS file locking issues
+            config_path = 'config.yaml'
+            # Open with os.open to bypass Python's buffering
+            fd = os.open(config_path, os.O_RDONLY)
+            try:
+                file_content = os.read(fd, os.fstat(fd).st_size)
+                content = file_content.decode('utf-8')
+                return yaml.safe_load(content)
+            finally:
+                os.close(fd)
+        except OSError as e:
+            if e.errno == 35 and attempt < max_retries - 1:
+                # Resource deadlock - retry after a short delay
+                logger.warning(f"Config read attempt {attempt + 1} failed, retrying...")
+                time.sleep(retry_delay)
+                continue
+            logger.error(f"Failed to load config: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to load config: {e}")
+            raise
 
 
 def initialize_services():
@@ -94,8 +116,16 @@ def get_user_services():
     # Create user-specific instances
     egroupware_client = EGroupwareClient(egw_config)
 
-    # Create database with user context
-    database = QdrantDatabase(config, embedding_service.get_dimension())
+    # Create database with user context based on configuration
+    db_type = config.get('database_type', 'qdrant')  # Default to qdrant for backward compatibility
+    
+    if db_type == 'mariadb':
+        logger.info("Using MariaDB database backend")
+        database = MariaDBDatabase(config, embedding_service.get_dimension())
+    else:
+        logger.info("Using Qdrant database backend")
+        database = QdrantDatabase(config, embedding_service.get_dimension())
+    
     database.set_user_id(user_id)
 
     # Create RAG service with config
