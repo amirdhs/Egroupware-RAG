@@ -1,6 +1,6 @@
-# EGroupware RAG System with Qdrant
+# EGroupware RAG System
 
-A complete Retrieval-Augmented Generation (RAG) system for EGroupware that uses Qdrant vector database for semantic search and question answering.
+A complete Retrieval-Augmented Generation (RAG) system for EGroupware with support for multiple database backends for semantic search and question answering.
 
 ## 🌟 Features
 
@@ -9,7 +9,7 @@ A complete Retrieval-Augmented Generation (RAG) system for EGroupware that uses 
 - **User Isolation**: Multi-user support with data isolation
 - **Flexible Embeddings**: Support for HuggingFace, OpenAI, and IONOS embedding models
 - **LLM Integration**: Natural language responses using OpenAI or IONOS LLMs
-- **Qdrant Vector Database**: Fast and efficient vector similarity search
+- **Dual Database Support**: Choose between Qdrant (vector database) or MariaDB (relational database)
 - **Web Interface**: Beautiful and intuitive web UI
 - **RESTful API**: Complete API for integration
 
