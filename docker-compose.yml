@@ -1,4 +1,27 @@
 services:
+  # MariaDB Database
+  mariadb:
+    image: mariadb:11.2
+    ports:
+      - "3307:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=rag_vectors
+      - MYSQL_USER=rag_user
+      - MYSQL_PASSWORD=rag_password
+    restart: unless-stopped
+    networks:
+      - rag-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
   # Qdrant Vector Database
   qdrant:
     image: qdrant/qdrant:latest
@@ -24,7 +47,10 @@ services:
       - PYTHONUNBUFFERED=1
       - TOKENIZERS_PARALLELISM=false
     depends_on:
-      - qdrant
+      mariadb:
+        condition: service_started
+      qdrant:
+        condition: service_started
     restart: unless-stopped
     networks:
       - rag-network
@@ -34,5 +60,6 @@ networks:
     driver: bridge
 
 volumes:
+  mariadb_data:
   qdrant_data:
 
