@@ -134,19 +134,39 @@ class EmbeddingService:
 
     def _embed_ionos(self, text: str) -> np.ndarray:
         """Generate embedding using IONOS"""
-        import json
+        import re
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json; charset=utf-8"
         }
 
         # Sanitize input text
         sanitized_text = text.strip()
-        sanitized_text = sanitized_text.encode('utf-8', errors='ignore').decode('utf-8')
-        sanitized_text = ''.join(char for char in sanitized_text if char.isprintable() or char in '\n\t')
+        
+        # Replace multiple whitespaces with single space
+        sanitized_text = re.sub(r'\s+', ' ', sanitized_text)
+        
+        # Remove non-UTF-8 characters
+        sanitized_text = (
+            sanitized_text.encode('utf-8', errors='ignore')
+            .decode('utf-8')
+        )
+        
+        # Remove control characters but keep spaces
+        sanitized_text = ''.join(
+            char if char.isprintable() or char.isspace()
+            else '' for char in sanitized_text
+        )
+        
+        # Keep only safe characters
+        pattern = r'[^\w\s\-.,;:!?()\[\]{}@#$%&*+=/<>\'\"]+'
+        sanitized_text = re.sub(pattern, '', sanitized_text)
+        
         if len(sanitized_text) > 6000:
             sanitized_text = sanitized_text[:6000]
+            
+        sanitized_text = sanitized_text.strip()
 
         payload = {
             "model": self.model_name,
@@ -157,59 +177,86 @@ class EmbeddingService:
             response = self.client.post(
                 self.api_url,
                 headers=headers,
-                data=json.dumps(payload, ensure_ascii=False),
+                json=payload,
                 timeout=30
             )
 
             response.raise_for_status()
             result = response.json()
 
-            embedding = np.array(result['data'][0]['embedding'], dtype=np.float32)
+            embedding = np.array(
+                result['data'][0]['embedding'],
+                dtype=np.float32
+            )
             return embedding
         except Exception as e:
             logger.error(f"IONOS embedding error: {e}")
             if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"Response status: {e.response.status_code}")
-                logger.error(f"Response body: {e.response.text[:500]}")
+                logger.error(f"Status: {e.response.status_code}")
+                logger.error(f"Body: {e.response.text[:500]}")
             raise
 
     def _embed_batch_ionos(self, texts: List[str]) -> List[np.ndarray]:
         """Generate embeddings for multiple texts using IONOS"""
-        import json
+        import re
 
         # Filter and sanitize texts
         valid_texts = []
         valid_indices = []
         for i, text in enumerate(texts):
             if text and isinstance(text, str) and text.strip():
-                # Sanitize text: remove excessive whitespace and limit length
-                sanitized = ' '.join(text.strip().split())
-                # Remove non-UTF-8 characters and control characters
-                sanitized = sanitized.encode('utf-8', errors='ignore').decode('utf-8')
-                # Remove control characters except newlines and tabs
-                sanitized = ''.join(char for char in sanitized if char.isprintable() or char in '\n\t')
+                # Sanitize text: remove excessive whitespace
+                sanitized = text.strip()
+                
+                # Replace multiple whitespaces/newlines with single space
+                sanitized = re.sub(r'\s+', ' ', sanitized)
+                
+                # Remove non-UTF-8 characters
+                sanitized = (
+                    sanitized.encode('utf-8', errors='ignore')
+                    .decode('utf-8')
+                )
+                
+                # Remove control characters but keep spaces
+                sanitized = ''.join(
+                    char if char.isprintable() or char.isspace()
+                    else '' for char in sanitized
+                )
+                
+                # Keep only safe characters
+                pattern = r'[^\w\s\-.,;:!?()\[\]{}@#$%&*+=/<>\'\"]+'
+                sanitized = re.sub(pattern, '', sanitized)
+                
                 # Limit to 6000 characters to avoid API issues
                 if len(sanitized) > 6000:
                     sanitized = sanitized[:6000]
+                    
+                # Final cleanup
+                sanitized = sanitized.strip()
+                
                 # Skip if too short after sanitization
-                if len(sanitized.strip()) < 3:
-                    logger.warning(f"Skipping text at index {i}: too short after sanitization")
+                if len(sanitized) < 3:
+                    logger.warning(
+                        f"Skipping text at index {i}: "
+                        f"too short ('{sanitized}')"
+                    )
                     continue
+                    
                 valid_texts.append(sanitized)
                 valid_indices.append(i)
             else:
-                logger.warning(f"Skipping empty or invalid text at index {i}")
+                logger.warning(f"Skipping empty or invalid text at {i}")
 
         if not valid_texts:
             raise ValueError("No valid texts to embed")
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json; charset=utf-8"
         }
 
-        # Process in smaller batches if the batch is too large
-        max_batch_size = 10  # IONOS might have a limit on batch size
+        # Process in smaller batches
+        max_batch_size = 10
         all_embeddings = []
 
         for batch_start in range(0, len(valid_texts), max_batch_size):
@@ -222,29 +269,40 @@ class EmbeddingService:
             }
 
             try:
-                logger.debug(f"Sending sub-batch {batch_start//max_batch_size + 1}: {len(batch_texts)} texts to IONOS API")
+                batch_num = batch_start // max_batch_size + 1
+                logger.debug(
+                    f"Sending sub-batch {batch_num}: "
+                    f"{len(batch_texts)} texts"
+                )
                 response = self.client.post(
                     self.api_url,
                     headers=headers,
-                    data=json.dumps(payload, ensure_ascii=False),
+                    json=payload,
                     timeout=60
                 )
 
                 response.raise_for_status()
                 result = response.json()
 
-                batch_embeddings = [np.array(item['embedding'], dtype=np.float32) for item in result['data']]
+                batch_embeddings = [
+                    np.array(item['embedding'], dtype=np.float32)
+                    for item in result['data']
+                ]
                 all_embeddings.extend(batch_embeddings)
 
             except Exception as e:
-                logger.error(f"IONOS batch embedding error for sub-batch {batch_start//max_batch_size + 1}: {e}")
+                batch_num = batch_start // max_batch_size + 1
+                logger.error(
+                    f"IONOS batch error for sub-batch {batch_num}: {e}"
+                )
                 if hasattr(e, 'response') and e.response is not None:
-                    logger.error(f"Response status: {e.response.status_code}")
-                    logger.error(f"Response body: {e.response.text[:500]}")
-                    logger.error(f"Payload: {json.dumps(payload, ensure_ascii=False)[:500]}")
+                    logger.error(f"Status: {e.response.status_code}")
+                    logger.error(f"Body: {e.response.text[:500]}")
+                    samples = [t[:100] for t in batch_texts[:3]]
+                    logger.error(f"Sample texts: {samples}")
                 raise
 
-        # Create full results array including placeholders for skipped texts
+        # Create full results including placeholders for skipped texts
         full_embeddings = []
         valid_idx = 0
         for i in range(len(texts)):
@@ -253,7 +311,8 @@ class EmbeddingService:
                 valid_idx += 1
             else:
                 # Create zero vector for invalid texts
-                full_embeddings.append(np.zeros(self.dimension, dtype=np.float32))
+                zero_vec = np.zeros(self.dimension, dtype=np.float32)
+                full_embeddings.append(zero_vec)
 
         return full_embeddings
 
