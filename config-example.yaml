@@ -41,6 +41,10 @@ llm:
   # api_url: "https://openai.inference.de-txl.ionos.com/v1"
   # model: "meta-llama/Llama-3.3-70B-Instruct"
 
+# Database Type Selection
+# Options: "qdrant" or "mariadb"
+database_type: "qdrant"  # Change to "mariadb" to use MariaDB instead
+
 # Qdrant Vector Database Configuration
 qdrant:
   mode: "disk"  # Options: memory, disk, server
@@ -48,6 +52,14 @@ qdrant:
   # For server mode, use:
   # host: "localhost"
   # port: 6333
+
+# MariaDB Configuration (if using MariaDB as database_type)
+mariadb:
+  host: "localhost"
+  port: 3306
+  database: "rag_vectors"
+  user: "rag_user"
+  password: "rag_password"
 
 # Chunking Configuration
 chunking:
