@@ -141,16 +141,23 @@ class EmbeddingService:
             "Content-Type": "application/json"
         }
 
+        # Sanitize input text
+        sanitized_text = text.strip()
+        sanitized_text = sanitized_text.encode('utf-8', errors='ignore').decode('utf-8')
+        sanitized_text = ''.join(char for char in sanitized_text if char.isprintable() or char in '\n\t')
+        if len(sanitized_text) > 6000:
+            sanitized_text = sanitized_text[:6000]
+
         payload = {
             "model": self.model_name,
-            "input": text
+            "input": sanitized_text
         }
 
         try:
             response = self.client.post(
                 self.api_url,
                 headers=headers,
-                data=json.dumps(payload),
+                data=json.dumps(payload, ensure_ascii=False),
                 timeout=30
             )
 
@@ -177,9 +184,17 @@ class EmbeddingService:
             if text and isinstance(text, str) and text.strip():
                 # Sanitize text: remove excessive whitespace and limit length
                 sanitized = ' '.join(text.strip().split())
-                # Limit to 8000 characters to avoid API issues
-                if len(sanitized) > 8000:
-                    sanitized = sanitized[:8000]
+                # Remove non-UTF-8 characters and control characters
+                sanitized = sanitized.encode('utf-8', errors='ignore').decode('utf-8')
+                # Remove control characters except newlines and tabs
+                sanitized = ''.join(char for char in sanitized if char.isprintable() or char in '\n\t')
+                # Limit to 6000 characters to avoid API issues
+                if len(sanitized) > 6000:
+                    sanitized = sanitized[:6000]
+                # Skip if too short after sanitization
+                if len(sanitized.strip()) < 3:
+                    logger.warning(f"Skipping text at index {i}: too short after sanitization")
+                    continue
                 valid_texts.append(sanitized)
                 valid_indices.append(i)
             else:
@@ -211,7 +226,7 @@ class EmbeddingService:
                 response = self.client.post(
                     self.api_url,
                     headers=headers,
-                    data=json.dumps(payload),
+                    data=json.dumps(payload, ensure_ascii=False),
                     timeout=60
                 )
 
