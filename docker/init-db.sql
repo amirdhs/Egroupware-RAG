@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS documents (
     user_id VARCHAR(255) NOT NULL,
     doc_id VARCHAR(255) NOT NULL,
     app_name VARCHAR(50) NOT NULL,
-    content TEXT NOT NULL,
+    content LONGTEXT NOT NULL,
     embedding LONGBLOB NOT NULL,
     metadata JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
