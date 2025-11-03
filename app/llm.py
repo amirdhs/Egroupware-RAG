@@ -15,6 +15,8 @@ class LLMService:
     def __init__(self, config: Dict[str, Any]):
         self.provider = config.get('provider', 'openai').lower()
         self.temperature = config.get('temperature', 0.7)
+        # Reduced max_tokens for faster responses (configurable)
+        self.max_tokens = config.get('max_tokens', 800)
 
         # Initialize as None by default
         self.client = None
@@ -107,45 +109,61 @@ class LLMService:
                 api_url = api_url.rstrip('/') + '/chat/completions'
             self.api_url = api_url
             self.model = config.get('model', 'mixtral-8x7b')
+            self.timeout = config.get('timeout', 15)  # Configurable timeout
             logger.info(f"✅ IONOS LLM initialized: {self.model}")
         except ImportError:
             logger.warning("⚠️  requests not installed - LLM will use simple responses")
         except Exception as e:
             logger.warning(f"⚠️  IONOS LLM initialization failed: {e} - using simple responses")
 
-    def generate_response(self, query: str, context_documents: List[Dict[str, Any]]) -> str:
-        """Generate a response based on query and retrieved documents"""
+    def generate_response(self, query: str, context_documents: List[Dict[str, Any]], use_simple: bool = False) -> str:
+        """Generate a response based on query and retrieved documents
+        
+        Args:
+            query: User's search query
+            context_documents: Retrieved documents for context
+            use_simple: If True, skip LLM and use fast simple response
+        """
 
         if not context_documents:
             return "I couldn't find any relevant information to answer your question."
 
-        # If no client, use simple response
-        if not self.client:
+        # Fast mode: use simple response (no LLM call)
+        if use_simple or not self.client:
             return self._generate_simple_response(query, context_documents)
 
-        # Build context from top documents
+        # Build context from top documents (limit to 3 for speed)
         context_parts = []
-        for i, doc in enumerate(context_documents[:5], 1):
+        for i, doc in enumerate(context_documents[:3], 1):
+            metadata = doc.get('metadata', {})
+            app_type = doc['app_name']
+            
+            # Truncate content if too long (keep first 300 chars for speed)
+            content = doc['content']
+            if len(content) > 300:
+                content = content[:300] + "..."
+            
+            # Add structured context with metadata
             context_parts.append(
-                f"Document {i} ({doc['app_name']}):\n{doc['content']}"
+                f"[Source {i} - {app_type.upper()}]\n{content}"
             )
 
         context = "\n\n".join(context_parts)
 
-        # System prompt
-        system_prompt = """You are a helpful assistant for EGroupware data. 
-Answer questions based only on the provided context from EGroupware applications (contacts, calendar, tasks).
-Be concise and friendly. If the context doesn't contain enough information, say so.
-Always cite which documents you reference."""
+        # Concise system prompt for faster processing
+        system_prompt = """You are an EGroupware assistant. Answer questions based on the provided context.
+- Be concise and direct
+- Use **bold** for key information
+- List multiple items clearly
+- Cite sources"""
 
-        # User prompt
-        user_prompt = f"""Context from EGroupware:
+        # Shorter user prompt for speed
+        user_prompt = f"""Question: {query}
 
+Context:
 {context}
 
-Question: {query}
-
-Please provide a helpful answer based on the context above."""
+Answer briefly and clearly:"""
 
         try:
             # Generate response based on provider
@@ -172,7 +190,7 @@ Please provide a helpful answer based on the context above."""
                         {"role": "user", "content": user_prompt}
                     ],
                     temperature=self.temperature,
-                    max_tokens=500
+                    max_tokens=self.max_tokens
                 )
             # Classic openai module: openai.ChatCompletion.create(...)
             elif hasattr(self.client, 'ChatCompletion'):
@@ -183,7 +201,7 @@ Please provide a helpful answer based on the context above."""
                         {"role": "user", "content": user_prompt}
                     ],
                     temperature=self.temperature,
-                    max_tokens=500
+                    max_tokens=self.max_tokens
                 )
             # As a last resort, try module-style chat completions if available
             elif hasattr(self.client, 'chat') and hasattr(self.client.chat, 'create'):
@@ -194,7 +212,7 @@ Please provide a helpful answer based on the context above."""
                         {"role": "user", "content": user_prompt}
                     ],
                     temperature=self.temperature,
-                    max_tokens=500
+                    max_tokens=self.max_tokens
                 )
             else:
                 raise RuntimeError("OpenAI client does not expose a supported chat interface")
@@ -226,7 +244,7 @@ Please provide a helpful answer based on the context above."""
                 {"role": "user", "content": user_prompt}
             ],
             "temperature": self.temperature,
-            "max_tokens": 500
+            "max_tokens": self.max_tokens
         }
 
         try:
@@ -234,7 +252,7 @@ Please provide a helpful answer based on the context above."""
                 self.api_url,
                 headers=self.headers,
                 data=json.dumps(payload),
-                timeout=30
+                timeout=self.timeout
             )
 
             response.raise_for_status()  # Raise exception for HTTP errors
@@ -257,26 +275,62 @@ Please provide a helpful answer based on the context above."""
         if not context_documents:
             return "No relevant information found."
 
-        # Build simple response
-        response_parts = [f"I found {len(context_documents)} relevant result(s):\n"]
+        # Build comprehensive simple response
+        response_parts = [f"**Found {len(context_documents)} relevant result(s):**\n"]
 
-        for i, doc in enumerate(context_documents[:3], 1):
+        for i, doc in enumerate(context_documents[:10], 1):
             metadata = doc.get('metadata', {})
             app = doc['app_name']
+            similarity = doc.get('similarity', 0)
 
+            response_parts.append(f"\n**{i}. {app.upper()}** (Match: {similarity*100:.1f}%)")
+            
             if app == 'addressbook':
                 name = metadata.get('name', 'Contact')
-                response_parts.append(f"{i}. Contact: {name}")
+                org = metadata.get('org', '')
+                email = metadata.get('email', '')
+                title = metadata.get('title', '')
+                
+                response_parts.append(f"   • **Name:** {name}")
+                if org:
+                    response_parts.append(f"   • **Organization:** {org}")
+                if title:
+                    response_parts.append(f"   • **Title:** {title}")
+                if email:
+                    response_parts.append(f"   • **Email:** {email}")
+                    
             elif app == 'calendar':
-                title = metadata.get('title', 'Event')
-                response_parts.append(f"{i}. Event: {title}")
+                event_title = metadata.get('title', 'Event')
+                location = metadata.get('location', '')
+                start = metadata.get('start', '')
+                end = metadata.get('end', '')
+                
+                response_parts.append(f"   • **Event:** {event_title}")
+                if start:
+                    response_parts.append(f"   • **Start:** {start}")
+                if end:
+                    response_parts.append(f"   • **End:** {end}")
+                if location:
+                    response_parts.append(f"   • **Location:** {location}")
+                    
             elif app == 'infolog':
-                title = metadata.get('title', 'Task')
-                response_parts.append(f"{i}. Task: {title}")
+                task_title = metadata.get('title', 'Task')
+                status = metadata.get('status', '')
+                priority = metadata.get('priority', '')
+                
+                response_parts.append(f"   • **Task:** {task_title}")
+                if status:
+                    response_parts.append(f"   • **Status:** {status}")
+                if priority:
+                    response_parts.append(f"   • **Priority:** {priority}")
             else:
-                response_parts.append(f"{i}. {doc['content'][:100]}...")
+                # For unknown app types, show content preview
+                content_preview = doc['content'][:200]
+                if len(doc['content']) > 200:
+                    content_preview += "..."
+                response_parts.append(f"   {content_preview}")
 
-        if len(context_documents) > 3:
-            response_parts.append(f"\n...and {len(context_documents) - 3} more results.")
+        if len(context_documents) > 10:
+            response_parts.append(f"\n_...and {len(context_documents) - 10} more results not shown._")
 
         return "\n".join(response_parts)
