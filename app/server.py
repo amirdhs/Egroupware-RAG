@@ -257,7 +257,7 @@ def index_app(app_name):
 
 @app.route('/api/search', methods=['POST'])
 def search():
-    """Search endpoint"""
+    """Search endpoint with optional fast mode"""
     try:
         rag_service, database = get_user_services()
 
@@ -265,6 +265,8 @@ def search():
         query = data.get('query', '')
         app_filter = data.get('app_filter')
         top_k = data.get('top_k', 5)
+        # Fast mode: skip LLM for instant results
+        fast_mode = data.get('fast_mode', False)
 
         # Get user_id for debugging
         user_id = session.get('user_id', 'unknown')
@@ -273,13 +275,14 @@ def search():
             return jsonify({'success': False, 'error': 'Query is required'}), 400
 
         # Debug the search parameters
-        logger.info(f"Search request: query='{query}', app_filter={app_filter}, top_k={top_k}, user_id={user_id}")
+        mode_str = "FAST" if fast_mode else "NORMAL"
+        logger.info(f"Search request ({mode_str}): query='{query}', app_filter={app_filter}, top_k={top_k}, user_id={user_id}")
 
         # Get database stats before search for debugging
         db_stats = database.get_stats()
         logger.info(f"Database stats before search: {db_stats}")
 
-        result = rag_service.search(query, app_filter, top_k)
+        result = rag_service.search(query, app_filter, top_k, fast_mode=fast_mode)
         
         # Log search results
         result_count = len(result.get('results', []))
