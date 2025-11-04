@@ -507,13 +507,75 @@ class EGroupwareClient:
 
     def get_calendar_events(self, since_date: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Fetch calendar events with support for incremental updates
+        Fetch calendar events using simple GET request approach
+        This fetches ALL events from the API and is more reliable than CalDAV REPORT
 
         Args:
             since_date: Optional ISO formatted date to fetch only items modified since this date
         """
         logger.info(f"Fetching {'modified' if since_date else 'ALL'} calendar events...")
-        return self._get_all_calendar_events_comprehensive(since_date)
+        
+        all_events = []
+        
+        # Get all calendar collections
+        standard_collections = self._discover_calendar_collections()
+        group_collections = self._discover_group_calendars()
+        all_collections = list(set(standard_collections + group_collections))
+        
+        logger.info(f"Found {len(all_collections)} total calendar collections to check")
+        
+        for collection in all_collections:
+            try:
+                logger.info(f"Fetching calendar events from collection: {collection}")
+                
+                # Use simple GET request without date filters
+                # The API will return all available events
+                events = self._make_paginated_request(collection, since_date=since_date)
+                
+                # Filter and process events
+                valid_events = []
+                for event in events:
+                    if event.get("@type") == "Event":  # Valid calendar event
+                        # Add collection info to the event
+                        event["_collection"] = collection
+                        valid_events.append(event)
+                    else:
+                        logger.debug(f"Skipping non-Event item: {event.get('@type', 'Unknown')}")
+                
+                if valid_events:
+                    logger.info(f"✅ Fetched {len(valid_events)} events from {collection}")
+                    all_events.extend(valid_events)
+                else:
+                    logger.debug(f"No events found in collection: {collection}")
+                    
+            except Exception as e:
+                logger.warning(f"Failed to fetch events from collection {collection}: {e}")
+                continue
+        
+        # Remove duplicates based on UID
+        unique_events = {}
+        for event in all_events:
+            uid = event.get('uid', event.get('_id', ''))
+            if uid and uid not in unique_events:
+                unique_events[uid] = event
+            elif uid in unique_events:
+                # Keep the event from the most specific collection
+                if 'group' in event.get('_collection', '').lower() or 'shared' in event.get('_collection', '').lower():
+                    unique_events[uid] = event
+        
+        final_events = list(unique_events.values())
+        logger.info(f"✅ COMPREHENSIVE CALENDAR FETCH: {len(final_events)} unique events from {len(all_collections)} collections")
+        
+        # Log collection summary
+        collection_summary = {}
+        for event in final_events:
+            collection = event.get('_collection', 'unknown')
+            collection_summary[collection] = collection_summary.get(collection, 0) + 1
+        
+        for collection, count in collection_summary.items():
+            logger.info(f"  - {collection}: {count} events")
+        
+        return final_events
 
     def _get_all_infolog_entries_comprehensive(self, since_date: Optional[str] = None) -> List[Dict[str, Any]]:
         """
