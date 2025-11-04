@@ -150,10 +150,19 @@ class LLMService:
 
         context = "\n\n".join(context_parts)
 
+        # Get current date for temporal awareness
+        from datetime import datetime
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        current_year = datetime.now().year
+
         # Concise system prompt for faster processing
-        system_prompt = """You are an EGroupware assistant. Answer questions based on the provided context.
+        system_prompt = f"""You are an EGroupware assistant. Today's date is {current_date}.
+
+When answering questions:
 - Be concise and direct
 - Use **bold** for key information
+- For date queries (this week, today, upcoming, etc.), filter results by date
+- If events are from past years (before {current_year}), clearly state they are historical/old
 - List multiple items clearly
 - Cite sources"""
 
@@ -271,9 +280,19 @@ Answer briefly and clearly:"""
 
     def _generate_simple_response(self, query: str, context_documents: List[Dict[str, Any]]) -> str:
         """Generate a simple response without LLM APIs"""
+        from datetime import datetime
 
         if not context_documents:
             return "No relevant information found."
+
+        # Check if query is about current/future dates
+        query_lower = query.lower()
+        temporal_keywords = [
+            'this week', 'today', 'tomorrow', 'upcoming',
+            'next week', 'this month', 'now', 'current'
+        ]
+        is_temporal_query = any(kw in query_lower for kw in temporal_keywords)
+        current_year = datetime.now().year
 
         # Build comprehensive simple response
         response_parts = [f"**Found {len(context_documents)} relevant result(s):**\n"]
@@ -307,9 +326,37 @@ Answer briefly and clearly:"""
                 
                 response_parts.append(f"   • **Event:** {event_title}")
                 if start:
-                    response_parts.append(f"   • **Start:** {start}")
+                    # Parse and format the date nicely
+                    try:
+                        # Handle various date formats
+                        if 'T' in str(start):
+                            dt = datetime.fromisoformat(
+                                str(start).replace('Z', '+00:00')
+                            )
+                        else:
+                            dt = datetime.fromisoformat(str(start))
+                        formatted_date = dt.strftime('%Y-%m-%d at %H:%M')
+                        
+                        # Warn if event is old and query is temporal
+                        event_year = dt.year
+                        if is_temporal_query and event_year < current_year:
+                            formatted_date += f" ⚠️ (OLD - from {event_year})"
+                        
+                        response_parts.append(f"   • **Start:** {formatted_date}")
+                    except Exception:
+                        response_parts.append(f"   • **Start:** {start}")
                 if end:
-                    response_parts.append(f"   • **End:** {end}")
+                    try:
+                        if 'T' in str(end):
+                            dt = datetime.fromisoformat(
+                                str(end).replace('Z', '+00:00')
+                            )
+                        else:
+                            dt = datetime.fromisoformat(str(end))
+                        formatted_date = dt.strftime('%Y-%m-%d at %H:%M')
+                        response_parts.append(f"   • **End:** {formatted_date}")
+                    except Exception:
+                        response_parts.append(f"   • **End:** {end}")
                 if location:
                     response_parts.append(f"   • **Location:** {location}")
                     
@@ -332,5 +379,28 @@ Answer briefly and clearly:"""
 
         if len(context_documents) > 10:
             response_parts.append(f"\n_...and {len(context_documents) - 10} more results not shown._")
+
+        # Add warning if temporal query returned only old calendar events
+        if is_temporal_query:
+            calendar_docs = [d for d in context_documents[:10] if d['app_name'] == 'calendar']
+            if calendar_docs:
+                all_old = True
+                for doc in calendar_docs:
+                    start = doc.get('metadata', {}).get('start', '')
+                    if start:
+                        try:
+                            if 'T' in str(start):
+                                dt = datetime.fromisoformat(str(start).replace('Z', '+00:00'))
+                                if dt.year >= current_year:
+                                    all_old = False
+                                    break
+                        except Exception:
+                            pass
+                
+                if all_old:
+                    response_parts.append(
+                        f"\n⚠️ **Note:** All calendar events found are from previous years. "
+                        f"No events found for the current timeframe ({current_year})."
+                    )
 
         return "\n".join(response_parts)
