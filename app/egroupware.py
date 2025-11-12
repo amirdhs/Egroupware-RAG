@@ -50,9 +50,13 @@ class EGroupwareClient:
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         all_items = []
         sync_token = ""  # Start with empty sync-token to get all data
+        page_count = 0
+        max_pages = 100  # Safety limit to prevent infinite loops (100 pages * 1000 items = 100k max)
 
         try:
-            while True:
+            while page_count < max_pages:
+                page_count += 1
+                
                 # Build request parameters for pagination
                 params = {
                     'sync-token': sync_token,
@@ -63,18 +67,21 @@ class EGroupwareClient:
                 if since_date:
                     # EGroupware uses standard HTTP date format for filtering
                     params['since'] = since_date
-                    logger.info(f"Fetching only data modified since: {since_date}")
+                    if page_count == 1:
+                        logger.info(f"Fetching only data modified since: {since_date}")
 
-                logger.info(f"Fetching data from {url} (chunk size: {max_results_per_chunk})")
+                logger.info(f"📥 Fetching page {page_count} from {url} (chunk size: {max_results_per_chunk}, total so far: {len(all_items)})")
                 response = self.session.get(url, params=params, timeout=self.timeout)
                 response.raise_for_status()
 
                 if not response.content:
+                    logger.info(f"Empty response received, stopping pagination")
                     break
 
                 data = response.json()
 
                 # Process responses
+                items_in_page = 0
                 if "responses" in data:
                     for url_path, item_data in data["responses"].items():
                         if item_data and isinstance(item_data, dict):
@@ -84,22 +91,39 @@ class EGroupwareClient:
                             if "/" in url_path:
                                 item_data["_id"] = url_path.split("/")[-1]
                             all_items.append(item_data)
+                            items_in_page += 1
+
+                logger.info(f"✅ Page {page_count}: Fetched {items_in_page} items (total: {len(all_items)})")
 
                 # Check if there are more results
-                if not data.get("more-results", False):
+                has_more = data.get("more-results", False)
+                logger.info(f"📊 API returned 'more-results': {has_more}")
+                
+                if not has_more:
+                    logger.info(f"🏁 No more results available. Final count: {len(all_items)} items")
                     break
 
                 # Update sync-token for next chunk
-                sync_token = data.get("sync-token", "")
-                if not sync_token:
+                new_sync_token = data.get("sync-token", "")
+                if not new_sync_token:
+                    logger.warning(f"⚠️  'more-results' is True but no sync-token provided, stopping pagination")
                     break
+                    
+                if new_sync_token == sync_token:
+                    logger.warning(f"⚠️  Sync-token unchanged, possible API issue. Stopping to prevent infinite loop")
+                    break
+                
+                sync_token = new_sync_token
+                logger.info(f"🔄 Continuing to next page with new sync-token...")
 
-                logger.info(f"Fetched {len(data.get('responses', {}))} items, continuing with next chunk...")
+            if page_count >= max_pages:
+                logger.warning(f"⚠️  Reached maximum page limit ({max_pages}), there might be more data available")
 
         except Exception as e:
-            logger.error(f"API request failed for {endpoint}: {e}")
+            logger.error(f"❌ API request failed for {endpoint} on page {page_count}: {e}")
             raise
 
+        logger.info(f"✅ Total items fetched from {endpoint}: {len(all_items)}")
         return all_items
 
     def _request_single(self, endpoint: str) -> Dict[str, Any]:
