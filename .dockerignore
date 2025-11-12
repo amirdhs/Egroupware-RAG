@@ -1,0 +1,65 @@
+# Docker ignore file for EGroupware RAG System
+
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache
+.coverage
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation and examples
+*.md
+docs/
+examples/
+
+# Local development files
+config-example.yaml
+.env
+.env.local
+
+# Test files
+infolog_test.py
+test_infolog_fetch.py
+infolog_test_results.json
+
+# Docker files (not needed in container)
+Dockerfile
+Dockerfile.prod
+docker-compose.yml
+docker-compose.prod.yml
+config-docker.yaml
+start-docker.sh
+stop-docker.sh
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
