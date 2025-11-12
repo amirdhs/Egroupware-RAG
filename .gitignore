@@ -22,40 +22,113 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+pip-log.txt
+pip-delete-this-directory.txt
 
 # Virtual environments
 venv/
 ENV/
 env/
+.venv/
 
-# IDE
+# IDE & Editors
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
 
-# Qdrant storage
+# Database Storage
 qdrant_storage/
 qdrant_data/
+*.db
+*.sqlite
+*.sqlite3
 
 # Logs
 *.log
 server.log
+logs/
+*.log.*
 
-# Configuration
+# Configuration files with sensitive data
 config.yaml
+config-docker.yaml
+config.local.yaml
+.env
+.env.local
+.env.*.local
+
+# Secrets & Credentials
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+credentials/
 
 # Docker
 .dockerignore
+docker-compose.override.yml
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+Desktop.ini
 
-# Secrets
-.env
-*.pem
-*.key
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+test-results/
+*.cover
+.mypy_cache/
+.dmypy.json
+dmypy.json
 
-config-docker.yaml
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+*.bak
+*.swp
+
+# Test output files
+infolog_test_results.json
+test_*.json
+*_test_results.*
+
+# Model files (if you download any)
+models/
+*.bin
+*.pt
+*.pth
+*.onnx
+*.h5
+
+# Data files (if you have local data)
+data/
+*.csv
+*.json.gz
+*.parquet
+
+# Build artifacts
+*.whl
+*.tar.gz
