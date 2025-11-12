@@ -11,7 +11,6 @@ from typing import Dict, Any
 
 from app.egroupware import EGroupwareClient
 from app.embeddings import EmbeddingService
-from app.database import QdrantDatabase
 from app.mariadb_database import MariaDBDatabase
 from app.llm import LLMService
 from app.rag import RAGService
@@ -116,16 +115,9 @@ def get_user_services():
     # Create user-specific instances
     egroupware_client = EGroupwareClient(egw_config)
 
-    # Create database with user context based on configuration
-    db_type = config.get('database_type', 'qdrant')  # Default to qdrant for backward compatibility
-    
-    if db_type == 'mariadb':
-        logger.info("Using MariaDB database backend")
-        database = MariaDBDatabase(config, embedding_service.get_dimension())
-    else:
-        logger.info("Using Qdrant database backend")
-        database = QdrantDatabase(config, embedding_service.get_dimension())
-    
+    # Create database with user context - using MariaDB only
+    logger.info("Using MariaDB database backend")
+    database = MariaDBDatabase(config, embedding_service.get_dimension())
     database.set_user_id(user_id)
 
     # Create RAG service with config
